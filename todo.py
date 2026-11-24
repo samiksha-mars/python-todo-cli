@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """A tiny todo list manager that persists tasks to a JSON file."""
 
+import argparse
 import json
+import sys
 from pathlib import Path
+
+DEFAULT_FILE = Path.home() / ".todo.json"
 
 
 def load_tasks(path):
@@ -68,3 +72,71 @@ def clear_tasks(tasks, done_only=False):
 def format_task(task):
     mark = "x" if task["done"] else " "
     return f"{task['id']:>3}. [{mark}] {task['text']}"
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="A tiny todo list stored in a JSON file.")
+    parser.add_argument(
+        "--file",
+        default=str(DEFAULT_FILE),
+        help=f"path to the JSON file (default: {DEFAULT_FILE})",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    add = sub.add_parser("add", help="add a new task")
+    add.add_argument("text", nargs="+", help="task description")
+
+    lst = sub.add_parser("list", help="show tasks")
+    lst.add_argument("--pending", action="store_true", help="only show unfinished tasks")
+
+    done = sub.add_parser("done", help="mark a task as done")
+    done.add_argument("id", type=int, help="task id")
+
+    remove = sub.add_parser("remove", help="delete a task")
+    remove.add_argument("id", type=int, help="task id")
+
+    clear = sub.add_parser("clear", help="delete all tasks")
+    clear.add_argument("--done", action="store_true", help="only delete completed tasks")
+
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+
+    try:
+        tasks = load_tasks(args.file)
+    except (OSError, ValueError) as exc:
+        print(f"Error: could not read {args.file}: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        if args.command == "add":
+            task = add_task(tasks, " ".join(args.text))
+            print(f"Added task {task['id']}: {task['text']}")
+        elif args.command == "list":
+            shown = [t for t in tasks if not (args.pending and t["done"])]
+            if not shown:
+                print("No tasks.")
+            for task in shown:
+                print(format_task(task))
+            return 0
+        elif args.command == "done":
+            task = complete_task(tasks, args.id)
+            print(f"Completed task {task['id']}: {task['text']}")
+        elif args.command == "remove":
+            task = remove_task(tasks, args.id)
+            print(f"Removed task {task['id']}: {task['text']}")
+        elif args.command == "clear":
+            count = clear_tasks(tasks, done_only=args.done)
+            print(f"Removed {count} task(s).")
+    except (KeyError, ValueError) as exc:
+        print(f"Error: {exc.args[0]}", file=sys.stderr)
+        return 1
+
+    save_tasks(args.file, tasks)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
