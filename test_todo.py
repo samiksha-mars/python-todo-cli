@@ -128,6 +128,15 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("No task with id 7", err)
 
+    def test_unwritable_file_returns_error(self):
+        blocker = Path(self.tmp.name) / "not-a-dir"
+        blocker.write_text("")
+        self.path = str(blocker / "todo.json")
+        code, out, err = self.run_main("add", "task")
+        self.assertEqual(code, 1)
+        self.assertIn("could not save", err)
+        self.assertEqual(out, "")
+
     def test_list_empty(self):
         code, out, _ = self.run_main("list")
         self.assertEqual(code, 0)

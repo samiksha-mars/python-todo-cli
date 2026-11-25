@@ -117,7 +117,7 @@ def main(argv=None):
     try:
         if args.command == "add":
             task = add_task(tasks, " ".join(args.text))
-            print(f"Added task {task['id']}: {task['text']}")
+            message = f"Added task {task['id']}: {task['text']}"
         elif args.command == "list":
             shown = [t for t in tasks if not (args.pending and t["done"])]
             if not shown:
@@ -127,18 +127,23 @@ def main(argv=None):
             return 0
         elif args.command == "done":
             task = complete_task(tasks, args.id)
-            print(f"Completed task {task['id']}: {task['text']}")
+            message = f"Completed task {task['id']}: {task['text']}"
         elif args.command == "remove":
             task = remove_task(tasks, args.id)
-            print(f"Removed task {task['id']}: {task['text']}")
+            message = f"Removed task {task['id']}: {task['text']}"
         elif args.command == "clear":
             count = clear_tasks(tasks, done_only=args.done)
-            print(f"Removed {count} task(s).")
+            message = f"Removed {count} task(s)."
     except (KeyError, ValueError) as exc:
         print(f"Error: {exc.args[0]}", file=sys.stderr)
         return 1
 
-    save_tasks(args.file, tasks)
+    try:
+        save_tasks(args.file, tasks)
+    except OSError as exc:
+        print(f"Error: could not save {args.file}: {exc}", file=sys.stderr)
+        return 1
+    print(message)
     return 0
 
 
