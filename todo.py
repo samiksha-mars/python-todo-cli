@@ -31,7 +31,11 @@ def save_tasks(path, tasks):
 
 
 def add_task(tasks, text):
-    """Append a new task and return it. IDs keep increasing, never reused."""
+    """Append a new task and return it.
+
+    The new ID is one more than the highest existing ID, so IDs of other tasks
+    never change. Removing the task with the highest ID frees that ID again.
+    """
     text = text.strip()
     if not text:
         raise ValueError("Task text cannot be empty")

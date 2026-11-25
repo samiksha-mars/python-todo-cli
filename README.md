@@ -9,7 +9,7 @@ Uses only the Python standard library.
 - Tasks persisted to a human-readable JSON file (default `~/.todo.json`)
 - `--file` option to keep separate lists (e.g. per project)
 - `list --pending` hides completed tasks; `clear --done` removes only completed tasks
-- Task IDs are never reused, so they stay stable after removals
+- Task IDs stay stable: removing a task never renumbers the others
 
 ## Usage
 
