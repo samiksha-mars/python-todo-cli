@@ -3,7 +3,9 @@
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 DEFAULT_FILE = Path.home() / ".todo.json"
@@ -20,14 +22,44 @@ def load_tasks(path):
     data = json.loads(text)
     if not isinstance(data, list):
         raise ValueError(f"{path} does not contain a list of tasks")
+    for index, task in enumerate(data, start=1):
+        problem = _task_problem(task)
+        if problem:
+            raise ValueError(f"task #{index} in {path} {problem}")
     return data
 
 
+def _task_problem(task):
+    """Describe what is wrong with a loaded task, or return None if it is valid."""
+    if not isinstance(task, dict):
+        return "is not an object"
+    if not isinstance(task.get("id"), int) or isinstance(task["id"], bool):
+        return "has no integer 'id'"
+    if not isinstance(task.get("text"), str):
+        return "has no 'text'"
+    if not isinstance(task.get("done"), bool):
+        return "has no true/false 'done'"
+    return None
+
+
 def save_tasks(path, tasks):
-    """Write tasks to a JSON file, creating parent folders if needed."""
+    """Write tasks to a JSON file, creating parent folders if needed.
+
+    The data goes to a temporary file that then replaces the old one, so a crash
+    or full disk mid-write never leaves a truncated task list behind.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(tasks, indent=2) + "\n", encoding="utf-8")
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(tasks, indent=2) + "\n")
+        if path.exists():
+            os.chmod(tmp_name, path.stat().st_mode & 0o7777)  # keep the old file's permissions
+        os.replace(tmp_name, path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
 
 
 def add_task(tasks, text):

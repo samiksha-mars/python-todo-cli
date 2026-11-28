@@ -75,6 +75,44 @@ class StorageTest(unittest.TestCase):
             save_tasks(path, tasks)
             self.assertEqual(load_tasks(path), tasks)
 
+    def test_save_leaves_no_temp_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "todo.json"
+            save_tasks(path, [])
+            save_tasks(path, [{"id": 1, "text": "a", "done": False}])
+            self.assertEqual([p.name for p in Path(tmp).iterdir()], ["todo.json"])
+
+    def test_save_keeps_file_permissions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "todo.json"
+            path.write_text("[]")
+            path.chmod(0o640)
+            save_tasks(path, [])
+            self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+
+    def test_failed_save_keeps_old_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "todo.json"
+            save_tasks(path, [{"id": 1, "text": "a", "done": False}])
+            with self.assertRaises(TypeError):
+                save_tasks(path, [{"id": 2, "text": object(), "done": False}])
+            self.assertEqual(load_tasks(path)[0]["text"], "a")
+            self.assertEqual(len(list(Path(tmp).iterdir())), 1)
+
+    def test_rejects_malformed_tasks(self):
+        bad = {
+            "[1, 2]": "task #1 .* is not an object",
+            '[{"text": "a", "done": false}]': "task #1 .* integer 'id'",
+            '[{"id": 1, "text": "a", "done": false}, {"id": 2, "done": false}]': "task #2 .* 'text'",
+            '[{"id": 1, "text": "a"}]': "task #1 .* 'done'",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "todo.json"
+            for text, message in bad.items():
+                path.write_text(text)
+                with self.subTest(text=text), self.assertRaisesRegex(ValueError, message):
+                    load_tasks(path)
+
 
 class MainTest(unittest.TestCase):
 
@@ -136,6 +174,13 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("could not save", err)
         self.assertEqual(out, "")
+
+    def test_malformed_file_returns_error(self):
+        Path(self.path).write_text('[{"text": "no id"}]')
+        code, _, err = self.run_main("add", "task")
+        self.assertEqual(code, 1)
+        self.assertIn("integer 'id'", err)
+        self.assertEqual(Path(self.path).read_text(), '[{"text": "no id"}]')
 
     def test_list_empty(self):
         code, out, _ = self.run_main("list")
